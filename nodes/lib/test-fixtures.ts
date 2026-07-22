@@ -147,3 +147,47 @@ const FIXTURE_G_BYTES = new Uint8Array([...HEADER_G, ...chunk('MTrk', twoTempoTr
 export const FIXTURE_E_TRACK_COUNT_MISMATCH = FIXTURE_E_BYTES;
 export const FIXTURE_F_LYRICS = FIXTURE_F_BYTES;
 export const FIXTURE_G_TWO_TEMPOS = FIXTURE_G_BYTES;
+
+// ---- Fixture H: a noteOn with no matching noteOff before endOfTrack -------
+// noteOn ch0 note60 vel90 @ tick 0, then endOfTrack @ tick 200 (no noteOff
+// ever arrives). Hand-derived expected: the note is still reported, closed
+// at the track's last observed tick (200) rather than dropped or hung.
+const danglingNoteTrackData: number[] = [
+  ...vlq(0), 0x90, 0x3c, 0x5a, // noteOn ch0 note60 vel90
+  ...vlq(200), 0xff, 0x2f, 0x00, // endOfTrack @ tick 200
+];
+const HEADER_H = chunk('MThd', [...u16be(0), ...u16be(1), ...u16be(480)]);
+const FIXTURE_H_BYTES = new Uint8Array([...HEADER_H, ...chunk('MTrk', danglingNoteTrackData)]);
+
+// ---- Fixture I: two overlapping same-pitch/same-channel notes -------------
+// noteOn note60 vel80 @0, noteOn note60 vel90 @50 (still overlapping the
+// first), noteOff @100 (should close the FIRST/earlier noteOn, FIFO), noteOff
+// @150 (closes the second). Hand-derived expected: two notes,
+// {start:0,end:100,vel:80} and {start:50,end:150,vel:90}.
+const overlappingNotesTrackData: number[] = [
+  ...vlq(0), 0x90, 0x3c, 0x50, // noteOn note60 vel80 @ tick 0
+  ...vlq(50), 0x90, 0x3c, 0x5a, // noteOn note60 vel90 @ tick 50
+  ...vlq(50), 0x80, 0x3c, 0x40, // noteOff note60 @ tick 100
+  ...vlq(50), 0x80, 0x3c, 0x40, // noteOff note60 @ tick 150
+  ...vlq(0), 0xff, 0x2f, 0x00,
+];
+const HEADER_I = chunk('MThd', [...u16be(0), ...u16be(1), ...u16be(480)]);
+const FIXTURE_I_BYTES = new Uint8Array([...HEADER_I, ...chunk('MTrk', overlappingNotesTrackData)]);
+
+// ---- Fixture J: a leading unmatched noteOff, then one real note -----------
+// noteOff note64 @ tick 10 with NO prior noteOn (malformed-but-real-world),
+// then a proper noteOn/noteOff pair for note64 @ tick 20..120.
+// Hand-derived expected: exactly ONE note {start:20,end:120}; the leading
+// unmatched noteOff is silently dropped, not turned into a phantom note.
+const unmatchedNoteOffTrackData: number[] = [
+  ...vlq(10), 0x80, 0x40, 0x40, // noteOff note64 @ tick 10 (unmatched)
+  ...vlq(10), 0x90, 0x40, 0x46, // noteOn note64 vel70 @ tick 20
+  ...vlq(100), 0x80, 0x40, 0x40, // noteOff note64 @ tick 120
+  ...vlq(0), 0xff, 0x2f, 0x00,
+];
+const HEADER_J = chunk('MThd', [...u16be(0), ...u16be(1), ...u16be(480)]);
+const FIXTURE_J_BYTES = new Uint8Array([...HEADER_J, ...chunk('MTrk', unmatchedNoteOffTrackData)]);
+
+export const FIXTURE_H_DANGLING_NOTE = FIXTURE_H_BYTES;
+export const FIXTURE_I_OVERLAPPING_NOTES = FIXTURE_I_BYTES;
+export const FIXTURE_J_UNMATCHED_NOTEOFF = FIXTURE_J_BYTES;

@@ -11,7 +11,7 @@ import { parseMidi, MidiEvent as LibMidiEvent, MidiData as LibMidiData } from 'm
 // crash or an unbounded allocation. MIDI files are small (well under the
 // platform's ~4 MiB node-to-node transport cap), so these bounds are
 // generous for any real file while still capping worst-case cost/output size.
-export const MAX_INPUT_BYTES = 5 * 1024 * 1024; // 5 MiB
+export const MAX_INPUT_BYTES = 3 * 1024 * 1024; // 3 MiB — comfortably under the platform's ~4 MiB transport cap
 export const MAX_TOTAL_EVENTS = 500_000; // across all tracks combined
 
 export interface ParsedHeader {

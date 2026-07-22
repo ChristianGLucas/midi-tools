@@ -38,7 +38,10 @@ message MidiHeader {
   bool is_smpte = 3;
   // Valid when is_smpte = false: ticks per quarter note (PPQ), e.g. 480.
   int32 ticks_per_quarter_note = 4;
-  // Valid when is_smpte = true: negative SMPTE frame rate (24/25/29/30).
+  // Valid when is_smpte = true: SMPTE frame rate (24/25/29/30), always
+  // reported as a positive number of frames per second (the SMF header
+  // itself encodes this as a negative two's-complement byte on the wire;
+  // this field is the already-decoded, positive value).
   int32 frames_per_second = 5;
   // Valid when is_smpte = true: subframe resolution (ticks per frame).
   int32 ticks_per_frame = 6;
