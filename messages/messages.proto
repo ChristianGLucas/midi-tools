@@ -1,0 +1,320 @@
+// This file defines the data contracts (messages) for your Axiom package.
+// Every node's --input and --output refers to a message defined here.
+//
+// Run `axiom create message <Name>` to scaffold a new message below.
+// Run `axiom generate` to compile these definitions into language bindings in gen/.
+//
+// DOCUMENTATION
+//   Comments written directly above a message or field declaration are extracted
+//   automatically at publish time and shown in the Axiom registry as documentation.
+//   Write your descriptions there — no separate doc files needed.
+//
+//   Leading comment  (no blank line before the declaration) → registry description ✓
+//   Detached comment (blank line before the declaration)    → ignored by registry  ✗
+//
+// This file is yours to edit. Axiom only appends new message blocks — it never
+// overwrites or removes content you have written.
+
+syntax = "proto3";
+
+package christiangeorgelucas.midi_tools;
+
+// A raw Standard MIDI File (SMF, .mid). `data` is the exact byte content of
+// the .mid file (base64-encoded over JSON/HTTP, per proto3 `bytes` wire
+// convention). This is the canonical input envelope every parsing node
+// consumes.
+message MidiFile {
+  bytes data = 1;
+}
+
+// SMF header-chunk (MThd) contents: file format, track count, and the time
+// division that gives every tick position in the file meaning.
+message MidiHeader {
+  // 0 = single track, 1 = multiple simultaneous tracks, 2 = multiple
+  // independent (sequential) tracks.
+  int32 format = 1;
+  int32 num_tracks = 2;
+  // true if the division uses SMPTE timecode instead of ticks-per-quarter-note.
+  bool is_smpte = 3;
+  // Valid when is_smpte = false: ticks per quarter note (PPQ), e.g. 480.
+  int32 ticks_per_quarter_note = 4;
+  // Valid when is_smpte = true: negative SMPTE frame rate (24/25/29/30).
+  int32 frames_per_second = 5;
+  // Valid when is_smpte = true: subframe resolution (ticks per frame).
+  int32 ticks_per_frame = 6;
+  bool ok = 7;
+  // Populated, and all other fields empty, when ok = false.
+  string error = 8;
+}
+
+// One decoded SMF event, flattened to a single shape covering every event
+// type this package understands. Only the fields relevant to `type` are
+// meaningful; the rest carry their zero value.
+message RawEvent {
+  // Absolute tick position (delta-times summed from the start of the track).
+  int64 tick = 1;
+  // e.g. "noteOn", "noteOff", "controller", "programChange", "pitchBend",
+  // "channelAftertouch", "noteAftertouch", "setTempo", "timeSignature",
+  // "keySignature", "trackName", "instrumentName", "text", "lyrics",
+  // "marker", "cuePoint", "copyrightNotice", "endOfTrack", "sysEx",
+  // "sequencerSpecific", "unknownMeta", "sequenceNumber", "channelPrefix",
+  // "portPrefix", "smpteOffset".
+  string type = 2;
+  bool is_meta = 3;
+  // Channel-voice events only (0-15); 0 otherwise.
+  int32 channel = 4;
+  // noteOn / noteOff / noteAftertouch.
+  int32 note_number = 5;
+  // noteOn / noteOff velocity, or noteAftertouch amount.
+  int32 velocity = 6;
+  // controller events.
+  int32 controller_number = 7;
+  // controller value, pitchBend value, or channelAftertouch amount.
+  int32 value = 8;
+  // programChange.
+  int32 program_number = 9;
+  // Any text-bearing meta event (trackName, instrumentName, text, lyrics,
+  // marker, cuePoint, copyrightNotice).
+  string text = 10;
+  // setTempo.
+  int64 microseconds_per_beat = 11;
+  // timeSignature.
+  int32 numerator = 12;
+  int32 denominator = 13;
+  int32 metronome_clicks = 14;
+  int32 thirtyseconds_per_quarter = 15;
+  // keySignature: signed count of sharps (positive) / flats (negative), -7..7.
+  int32 key_sharps_flats = 16;
+  bool key_is_minor = 17;
+}
+
+// One decoded track, in original file order.
+message Track {
+  int32 index = 1;
+  // From the first trackName meta event in the track; "" if none present.
+  string name = 2;
+  int32 event_count = 3;
+  repeated RawEvent events = 4;
+}
+
+// The full structural decode of a Standard MIDI File.
+message ParseResult {
+  MidiHeader header = 1;
+  repeated Track tracks = 2;
+  bool ok = 3;
+  // Populated, and all other fields empty, when ok = false.
+  string error = 4;
+}
+
+// Lightweight per-track summary (no event payload).
+message TrackInfo {
+  int32 index = 1;
+  string name = 2;
+  int32 event_count = 3;
+  int32 note_count = 4;
+}
+
+message ListTracksResult {
+  repeated TrackInfo tracks = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+// A fully-paired musical note: a noteOn matched to its terminating noteOff
+// (or a zero-velocity noteOn, per the SMF convention both encode note-off).
+message Note {
+  int32 track_index = 1;
+  int32 channel = 2;
+  // 0-127.
+  int32 note_number = 3;
+  // Scientific pitch notation, e.g. "C4" for note 60 (middle C).
+  string note_name = 4;
+  // The note-on velocity (1-127).
+  int32 velocity = 5;
+  int64 start_tick = 6;
+  int64 end_tick = 7;
+  int64 duration_tick = 8;
+}
+
+message ExtractNotesInput {
+  bytes data = 1;
+  int32 track_index = 2;
+}
+
+message ExtractNotesResult {
+  repeated Note notes = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message TempoEvent {
+  int64 tick = 1;
+  int64 microseconds_per_beat = 2;
+  double bpm = 3;
+}
+
+message TempoMapResult {
+  // Sorted by tick ascending. Always non-empty on ok=true: if the file has
+  // no explicit setTempo event, the implied default (120 BPM / 500000 us
+  // per quarter note) at tick 0 is included.
+  repeated TempoEvent tempo_events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message TimeSignatureEvent {
+  int64 tick = 1;
+  int32 numerator = 2;
+  int32 denominator = 3;
+  int32 metronome_clicks = 4;
+  int32 thirtyseconds_per_quarter = 5;
+}
+
+message TimeSignaturesResult {
+  repeated TimeSignatureEvent events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message KeySignatureEvent {
+  int64 tick = 1;
+  // Signed count of sharps (positive) / flats (negative), -7..7.
+  int32 sharps_flats = 2;
+  bool is_minor = 3;
+  // e.g. "D major", "B minor".
+  string key_name = 4;
+}
+
+message KeySignaturesResult {
+  repeated KeySignatureEvent events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message ProgramChangeEvent {
+  int64 tick = 1;
+  int32 channel = 2;
+  // 0-127 General MIDI program number.
+  int32 program_number = 3;
+  // General MIDI instrument name for program_number (channel 9 is
+  // conventionally the GM percussion kit and is named accordingly).
+  string instrument_name = 4;
+}
+
+message ProgramChangesResult {
+  repeated ProgramChangeEvent events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message ControlChangeEvent {
+  int64 tick = 1;
+  int32 channel = 2;
+  // 0-127 MIDI controller number (e.g. 7 = channel volume, 64 = sustain).
+  int32 controller_number = 3;
+  int32 value = 4;
+}
+
+message ExtractControlChangesInput {
+  bytes data = 1;
+  // When filter_by_channel is true, only events on `channel` are returned.
+  bool filter_by_channel = 2;
+  int32 channel = 3;
+}
+
+message ControlChangesResult {
+  repeated ControlChangeEvent events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message TextEvent {
+  int64 tick = 1;
+  int32 track_index = 2;
+  // "trackName" | "instrumentName" | "text" | "marker" | "cuePoint" |
+  // "copyrightNotice". Lyrics are excluded — see ExtractLyrics.
+  string type = 3;
+  string text = 4;
+}
+
+message TextEventsResult {
+  repeated TextEvent events = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message LyricEvent {
+  int64 tick = 1;
+  int32 track_index = 2;
+  string text = 3;
+}
+
+message LyricsResult {
+  repeated LyricEvent lyrics = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message DurationResult {
+  // The highest absolute tick reached by any event in any track.
+  int64 total_ticks = 1;
+  // total_ticks converted via the file's tempo map (or SMPTE division).
+  double total_seconds = 2;
+  bool ok = 3;
+  string error = 4;
+}
+
+message TrackNoteCount {
+  int32 track_index = 1;
+  int32 note_count = 2;
+}
+
+message ChannelNoteCount {
+  int32 channel = 1;
+  int32 note_count = 2;
+}
+
+message NoteCountSummary {
+  repeated TrackNoteCount by_track = 1;
+  repeated ChannelNoteCount by_channel = 2;
+  int32 total_notes = 3;
+  bool ok = 4;
+  string error = 5;
+}
+
+message ExtractChannelNotesInput {
+  bytes data = 1;
+  int32 channel = 2;
+}
+
+message ExtractChannelNotesResult {
+  repeated Note notes = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message TicksToSecondsInput {
+  bytes data = 1;
+  repeated int64 ticks = 2;
+}
+
+message TicksToSecondsResult {
+  // Parallel to the input `ticks` array.
+  repeated double seconds = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message UsedChannelsResult {
+  // Sorted ascending, 0-15.
+  repeated int32 channels = 1;
+  bool ok = 2;
+  string error = 3;
+}
+
+message ValidationResult {
+  bool is_valid = 1;
+  // Empty when is_valid = true. Human-readable, one entry per distinct
+  // problem found (e.g. missing MThd, bad chunk length, truncated file).
+  repeated string issues = 2;
+}

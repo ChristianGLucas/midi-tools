@@ -1,0 +1,176 @@
+name: christiangeorgelucas/midi-tools
+version: 0.1.0
+language: typescript
+description: >-
+  Deterministic parsing and structural inspection of Standard MIDI Files (SMF,
+  .mid) — the binary format for timed musical performance/sequencing data
+  (note-on/off, tempo, control changes), distinct from music notation or
+  music-theory analysis. Callers supply the raw .mid file content (base64 over
+  the JSON/protobuf bridge); nodes decode the header (format, track count,
+  ticks-per-quarter-note or SMPTE division), list tracks, extract fully paired
+  note events (number, name, velocity, start/duration in ticks), tempo/time-
+  signature/key-signature meta events and the derived tempo map, program-
+  change events decoded to General MIDI instrument names, control-change
+  events, track/text/lyric meta events, per-track/per-channel note counts,
+  the channels actually used, tick<->second conversion via the real tempo
+  map, total duration, and independent well-formedness validation of the
+  MThd/MTrk chunk structure. Wraps midi-file (MIT, zero runtime
+  dependencies) for byte-level SMF decoding; all derived computations (note
+  pairing, tempo-map integration, GM instrument names, key-signature naming,
+  structural validation) are implemented directly against the MIDI/GM
+  specifications. Pure struct-in/struct-out — no audio synthesis, no
+  network, no wall-clock, no randomness.
+nodes:
+    - name: ParseMidiFile
+      input: MidiFile
+      output: ParseResult
+      description: >-
+        Parses a Standard MIDI File into its full structural representation:
+        header (format 0/1/2, track count, division) plus every track's
+        events in original order with absolute tick positions (delta-times
+        summed). This is the general-purpose structural dump; use the more
+        specific Extract* nodes when you only need one event category.
+        Returns ok=false with a descriptive error (never a crash) on a
+        malformed file, an oversized input, or a file whose event count
+        exceeds the safety cap.
+    - name: GetHeader
+      input: MidiFile
+      output: MidiHeader
+      description: >-
+        Extracts just the SMF header-chunk (MThd) fields: format (0/1/2),
+        track count, and the time division — either ticks-per-quarter-note
+        (the common case) or SMPTE frames-per-second + ticks-per-frame.
+    - name: ListTracks
+      input: MidiFile
+      output: ListTracksResult
+      description: >-
+        Lists every track with its index, name (from the track's first
+        trackName meta event, empty if none), total event count, and note
+        count — a quick structural overview before extracting specific event
+        types.
+    - name: ExtractNotes
+      input: ExtractNotesInput
+      output: ExtractNotesResult
+      description: >-
+        Extracts fully-paired musical notes from one track (by track_index):
+        each noteOn is matched to its terminating noteOff (or the
+        equivalent zero-velocity noteOn, per SMF convention) to produce a
+        note number (0-127), scientific-pitch note name (e.g. "C4" for note
+        60 / middle C), velocity, absolute start tick, end tick, and
+        duration in ticks. Correctly pairs overlapping notes of the same
+        pitch on the same channel using per-pitch queues in event order.
+    - name: ExtractTempoMap
+      input: MidiFile
+      output: TempoMapResult
+      description: >-
+        Extracts every setTempo meta event across all tracks (tick position,
+        microseconds-per-quarter-note, and the equivalent BPM), sorted by
+        tick ascending, forming the file's tempo map. Always includes an
+        implicit tick-0 entry at the MIDI-default 120 BPM if the file has no
+        explicit tempo event before the first tick that needs one — this is
+        the same map ComputeDuration and ConvertTicksToSeconds use
+        internally for tick<->second conversion.
+    - name: ExtractTimeSignatures
+      input: MidiFile
+      output: TimeSignaturesResult
+      description: >-
+        Extracts every timeSignature meta event across all tracks: tick
+        position, numerator, denominator (as a real fraction denominator,
+        e.g. 4 for quarter-note beats), MIDI clocks per metronome click, and
+        32nd-notes per quarter note.
+    - name: ExtractKeySignatures
+      input: MidiFile
+      output: KeySignaturesResult
+      description: >-
+        Extracts every keySignature meta event across all tracks: tick
+        position, signed sharps/flats count (-7..7, negative = flats), major
+        vs minor, and the resolved key name (e.g. "D major", "B minor") via
+        the standard circle-of-fifths mapping.
+    - name: ExtractProgramChanges
+      input: MidiFile
+      output: ProgramChangesResult
+      description: >-
+        Extracts every programChange event across all tracks — tick
+        position, channel, the raw General MIDI program number (0-127), and
+        the program number decoded to its General MIDI Level 1 instrument
+        name (e.g. 0 -> "Acoustic Grand Piano"). Channel 9 (MIDI channel 10,
+        the GM percussion channel) is reported as the standard drum kit
+        rather than a melodic instrument, per the GM spec.
+    - name: ExtractControlChanges
+      input: ExtractControlChangesInput
+      output: ControlChangesResult
+      description: >-
+        Extracts controller (control-change) events across all tracks — tick
+        position, channel, controller number (e.g. 7 = channel volume, 64 =
+        sustain pedal), and value. Set filter_by_channel=true with a channel
+        to restrict to one channel; otherwise every channel's controller
+        events are returned.
+    - name: ExtractTextEvents
+      input: MidiFile
+      output: TextEventsResult
+      description: >-
+        Extracts every non-lyric text-bearing meta event across all tracks —
+        trackName, instrumentName, text, marker, cuePoint, and
+        copyrightNotice — each tagged with its type, track index, and tick
+        position. Lyrics are intentionally excluded here; use ExtractLyrics
+        for karaoke-style lyric events.
+    - name: ExtractLyrics
+      input: MidiFile
+      output: LyricsResult
+      description: >-
+        Extracts every lyrics meta event across all tracks (tick position,
+        track index, text) — the per-syllable/word timing data karaoke-style
+        MIDI files encode.
+    - name: ComputeDuration
+      input: MidiFile
+      output: DurationResult
+      description: >-
+        Computes the file's total length: total_ticks (the highest absolute
+        tick reached by any event in any track) and total_seconds, derived
+        exactly from total_ticks via the file's own tempo map (ticks-per-
+        quarter-note division) or its SMPTE frame rate (SMPTE division) —
+        the same conversion ConvertTicksToSeconds exposes for arbitrary
+        tick positions.
+    - name: SummarizeNoteCounts
+      input: MidiFile
+      output: NoteCountSummary
+      description: >-
+        Counts paired notes per track and per channel across the whole file,
+        plus the overall total — a fast summary without returning every
+        individual note (use ExtractNotes or ExtractChannelNotes for that).
+    - name: ExtractChannelNotes
+      input: ExtractChannelNotesInput
+      output: ExtractChannelNotesResult
+      description: >-
+        Extracts every fully-paired note across all tracks that plays on one
+        specific MIDI channel (0-15), with the same note_name/velocity/
+        tick/duration fields as ExtractNotes.
+    - name: ConvertTicksToSeconds
+      input: TicksToSecondsInput
+      output: TicksToSecondsResult
+      description: >-
+        Converts a batch of absolute tick positions to seconds using the
+        file's real tempo map (ticks-per-quarter-note division) or SMPTE
+        frame rate (SMPTE division) — the exact math ComputeDuration uses
+        internally, exposed for arbitrary caller-supplied tick positions
+        (e.g. to time-align a Note's start_tick from ExtractNotes). Output
+        seconds are parallel to the input ticks array.
+    - name: DetectUsedChannels
+      input: MidiFile
+      output: UsedChannelsResult
+      description: >-
+        Scans every track for channel-voice events (note, controller,
+        program change, pitch bend, aftertouch) and returns the sorted set
+        of distinct MIDI channels (0-15) actually used anywhere in the file.
+    - name: ValidateMidiFile
+      input: MidiFile
+      output: ValidationResult
+      description: >-
+        Independently validates that the input is a well-formed Standard
+        MIDI File by walking its chunk structure from scratch (not via the
+        parsing library): confirms the MThd header chunk is present with a
+        sane length, that the declared track count matches the number of
+        MTrk chunks actually found, and that no chunk's declared length runs
+        past the end of the file. Returns is_valid plus a human-readable
+        issue per distinct structural problem found — never throws on
+        malformed input.
