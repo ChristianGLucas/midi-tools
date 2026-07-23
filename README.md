@@ -6,7 +6,7 @@ Deterministic parsing and structural inspection of Standard MIDI Files (SMF,
 (sheet music) or music-theory analysis (scales/chords/intervals): a MIDI file
 encodes *performance* events, not printed notation or theoretical structure.
 
-Built for the [Axiom](https://axiom.dev) marketplace, under the
+Built for the [Axiom](https://axiomide.com) marketplace, under the
 `christiangeorgelucas` handle.
 
 ## What it does
