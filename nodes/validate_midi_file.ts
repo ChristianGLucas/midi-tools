@@ -1,6 +1,6 @@
 import { MidiFile, ValidationResult } from '../gen/messages_pb';
 import { AxiomContext } from '../gen/axiomContext';
-import { validateStructure, MAX_INPUT_BYTES } from './lib/midi-core';
+import { validateStructure } from './lib/midi-core';
 
 /**
  * Independently validates that the input is a well-formed Standard MIDI
@@ -22,12 +22,6 @@ export function validateMidiFile(ax: AxiomContext, input: MidiFile): ValidationR
     result.addIssues('empty input: no MIDI file data was supplied');
     return result;
   }
-  if (bytes.length > MAX_INPUT_BYTES) {
-    result.setIsValid(false);
-    result.addIssues(`input is ${bytes.length} bytes, exceeding the ${MAX_INPUT_BYTES}-byte maximum`);
-    return result;
-  }
-
   const issues = validateStructure(bytes);
   result.setIsValid(issues.length === 0);
   for (const issue of issues) result.addIssues(issue);

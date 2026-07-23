@@ -8,8 +8,7 @@ import { safeParse, iterateAbsoluteEvents } from './lib/midi-core';
  * original order with absolute tick positions. This is the general-purpose
  * structural dump; use the more specific Extract* nodes when you only need
  * one event category. Returns ok=false with a descriptive error (never a
- * crash) on a malformed file, an oversized input, or a file whose event
- * count exceeds the safety cap.
+ * crash) on a malformed file.
  *
  * @param ax - Platform context: ax.log for logging, ax.secrets for secrets.
  */

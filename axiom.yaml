@@ -1,5 +1,5 @@
 name: christiangeorgelucas/midi-tools
-version: 0.1.1
+version: 0.1.2
 language: typescript
 description: >-
   Deterministic parsing and structural inspection of Standard MIDI Files (SMF,
@@ -31,8 +31,7 @@ nodes:
         summed). This is the general-purpose structural dump; use the more
         specific Extract* nodes when you only need one event category.
         Returns ok=false with a descriptive error (never a crash) on a
-        malformed file, an oversized input, or a file whose event count
-        exceeds the safety cap.
+        malformed file.
     - name: GetHeader
       input: MidiFile
       output: MidiHeader

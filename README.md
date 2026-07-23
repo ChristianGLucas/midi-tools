@@ -31,7 +31,7 @@ JSON/protobuf bridge). Nodes decode:
 
 Every node is a pure, deterministic struct-in/struct-out transform: no audio
 synthesis, no network access, no wall-clock reads, no randomness. Malformed
-or oversized input returns a structured error, never a crash.
+input returns a structured error, never a crash.
 
 ## Implementation
 

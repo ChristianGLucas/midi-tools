@@ -2,8 +2,6 @@ import { TicksToSecondsInput, TicksToSecondsResult } from '../gen/messages_pb';
 import { AxiomContext } from '../gen/axiomContext';
 import { safeParse, buildTempoMap, ticksToSeconds } from './lib/midi-core';
 
-const MAX_TICKS_PER_CALL = 100_000;
-
 /**
  * Converts a batch of absolute tick positions to seconds using the file's
  * real tempo map (ticks-per-quarter-note division) or SMPTE frame rate
@@ -24,11 +22,6 @@ export function convertTicksToSeconds(ax: AxiomContext, input: TicksToSecondsInp
   }
 
   const ticks = input.getTicksList();
-  if (ticks.length > MAX_TICKS_PER_CALL) {
-    result.setOk(false);
-    result.setError(`${ticks.length} tick(s) requested, exceeding the ${MAX_TICKS_PER_CALL}-per-call maximum`);
-    return result;
-  }
 
   const tempoMap = buildTempoMap(data);
   for (const tick of ticks) {

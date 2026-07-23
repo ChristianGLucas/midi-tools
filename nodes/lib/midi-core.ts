@@ -6,14 +6,6 @@
 // wrapped library.
 import { parseMidi, MidiEvent as LibMidiEvent, MidiData as LibMidiData } from 'midi-file';
 
-// ---- Input-surface safety bounds -------------------------------------------
-// A malformed/adversarial input must fail with a structured error, never a
-// crash or an unbounded allocation. MIDI files are small (well under the
-// platform's ~4 MiB node-to-node transport cap), so these bounds are
-// generous for any real file while still capping worst-case cost/output size.
-export const MAX_INPUT_BYTES = 3 * 1024 * 1024; // 3 MiB — comfortably under the platform's ~4 MiB transport cap
-export const MAX_TOTAL_EVENTS = 500_000; // across all tracks combined
-
 export interface ParsedHeader {
   format: number;
   numTracks: number;
@@ -98,14 +90,11 @@ export function validateStructure(bytes: Uint8Array): string[] {
 }
 
 // Decodes raw SMF bytes into a ParsedMidi, or a structured error string.
-// Every node funnels through this single choke point so the size/event
-// caps and the structural pre-check are enforced identically everywhere.
+// Every node funnels through this single choke point so the structural
+// pre-check is enforced identically everywhere.
 export function safeParse(bytes: Uint8Array | undefined | null): { data?: ParsedMidi; error?: string } {
   if (!bytes || bytes.length === 0) {
     return { error: 'empty input: no MIDI file data was supplied' };
-  }
-  if (bytes.length > MAX_INPUT_BYTES) {
-    return { error: `input is ${bytes.length} bytes, exceeding the ${MAX_INPUT_BYTES}-byte maximum` };
   }
 
   const structuralIssues = validateStructure(bytes);
@@ -118,11 +107,6 @@ export function safeParse(bytes: Uint8Array | undefined | null): { data?: Parsed
     raw = parseMidi(bytes);
   } catch (e) {
     return { error: `failed to parse MIDI file: ${String(e)}` };
-  }
-
-  const totalEvents = raw.tracks.reduce((sum, t) => sum + t.length, 0);
-  if (totalEvents > MAX_TOTAL_EVENTS) {
-    return { error: `midi file has ${totalEvents} events, exceeding the ${MAX_TOTAL_EVENTS}-event maximum` };
   }
 
   const h = raw.header as any;

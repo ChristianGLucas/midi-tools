@@ -33,11 +33,4 @@ describe('ConvertTicksToSeconds', () => {
     expect(seconds[2]).toBeCloseTo(1.0, 9);
     expect(seconds[3]).toBeCloseTo(1.5, 9);
   });
-
-  it('rejects a batch larger than the per-call cap with a structured error', () => {
-    const bigTicks = new Array(100_001).fill(0);
-    const result = convertTicksToSeconds(testContext, input(FIXTURE_A, bigTicks));
-    expect(result.getOk()).toBe(false);
-    expect(result.getError().length).toBeGreaterThan(0);
-  });
 });
